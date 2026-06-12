@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: saferent_db
+    environment:
+      POSTGRES_DB: saferent
+      POSTGRES_USER: saferent
+      POSTGRES_PASSWORD: saferent_dev_only
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saferent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
