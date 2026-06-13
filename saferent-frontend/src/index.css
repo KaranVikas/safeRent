@@ -6,3 +6,25 @@
 body {
   @apply bg-paper text-ink font-body antialiased;
 }
+
+/* Map count pins */
+.pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #B5482A;
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  font-family: "Public Sans", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.pin:hover {
+  transform: scale(1.12);
+}

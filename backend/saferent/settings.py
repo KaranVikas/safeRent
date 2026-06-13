@@ -30,6 +30,10 @@ env = environ.Env(
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
+# GeoDjango: newer GDAL versions (3.8+) aren't in Django 5.0's auto-detect
+# list, so allow explicit paths and fall back to a glob search.
+import ctypes.util, glob
+
 # GeoDjango: find GDAL explicitly, since auto-detection misses newer versions.
 GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH", default=None) or ctypes.util.find_library("gdal")
 if not GDAL_LIBRARY_PATH:
@@ -59,6 +63,7 @@ INSTALLED_APPS = [
     "django.contrib.gis",          # GeoDjango / PostGIS
     "rest_framework",
     "corsheaders",
+    "drf_spectacular",
     "core",                        # our app: buildings, complaints, etc.
 ]
 
@@ -117,12 +122,20 @@ CSRF_TRUSTED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],   # anonymous by design
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",                   # global safety net; per-endpoint limits later
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "SafeRent API",
+    "DESCRIPTION": "Anonymous, privacy-by-design API for buildings, complaints, etc.",
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,          # hide the raw /schema route from the docs UIs
 }
 
 LANGUAGE_CODE = "en-us"
