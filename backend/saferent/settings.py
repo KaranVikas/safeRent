@@ -9,17 +9,6 @@ Senior-dev conventions applied:
 """
 from pathlib import Path
 import environ
-import os, platform, glob
-import ctypes.util
-
-if platform.system() == "Windows":
-    OSGEO4W = r"C:\OSGeo4W"
-    os.environ["OSGEO4W_ROOT"] = OSGEO4W
-    os.environ["GDAL_DATA"] = OSGEO4W + r"\apps\gdal\share\gdal"
-    os.environ["PROJ_LIB"] = OSGEO4W + r"\share\proj"
-    os.environ["PATH"] = OSGEO4W + r"\bin;" + os.environ["PATH"]
-    if os.path.isdir(OSGEO4W + r"\bin"):
-        os.add_dll_directory(OSGEO4W + r"\bin")   # required on Python 3.8+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,30 +17,26 @@ env = environ.Env(
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     CORS_ALLOWED_ORIGINS=(list, ["http://localhost:5173"]),
 )
+# Read .env if present (local dev); on Render, env vars come from the dashboard.
 environ.Env.read_env(BASE_DIR / ".env")
 
 # GeoDjango: newer GDAL versions (3.8+) aren't in Django 5.0's auto-detect
 # list, so allow explicit paths and fall back to a glob search.
 import ctypes.util, glob
 
-# GeoDjango: find GDAL explicitly, since auto-detection misses newer versions.
 GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH", default=None) or ctypes.util.find_library("gdal")
 if not GDAL_LIBRARY_PATH:
-    if platform.system() == "Windows":
-        _candidates = glob.glob(r"C:\OSGeo4W\bin\gdal*.dll")
-    else:
-        _candidates = glob.glob("/usr/lib/*/libgdal.so*") + glob.glob("/usr/lib/libgdal.so*")
-    GDAL_LIBRARY_PATH = sorted(_candidates)[-1] if _candidates else None
+    _candidates = glob.glob("/usr/lib/*/libgdal.so*") + glob.glob("/usr/lib/libgdal.so*")
+    GDAL_LIBRARY_PATH = sorted(_candidates)[0] if _candidates else None
 
 SECRET_KEY = env("SECRET_KEY", default="dev-only-insecure-key-change-me")
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
-
-# GEOS often needs the same treatment on Windows.
-if platform.system() == "Windows":
-    _geos = glob.glob(r"C:\OSGeo4W\bin\geos_c*.dll")
-    if _geos:
-        GEOS_LIBRARY_PATH = sorted(_geos)[-1]
+# Render injects the service's public hostname here — add it automatically so we
+# don't have to hardcode/guess the exact subdomain.
+_render_host = env("RENDER_EXTERNAL_HOSTNAME", default=None)
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -63,7 +48,6 @@ INSTALLED_APPS = [
     "django.contrib.gis",          # GeoDjango / PostGIS
     "rest_framework",
     "corsheaders",
-    "drf_spectacular",
     "core",                        # our app: buildings, complaints, etc.
 ]
 
@@ -112,8 +96,22 @@ DATABASES["default"]["ENGINE"] = "django.contrib.gis.db.backends.postgis"
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 days, matches data-retention policy
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
+# In production the frontend (Vercel) and API (Render) are different sites, so the
+# session cookie must be SameSite=None + Secure to be sent on cross-site requests.
+# In local dev (same-origin via Vite proxy) Lax is correct and avoids requiring HTTPS.
+SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
 SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Render terminates TLS at its proxy; trust the forwarded-proto header so Django
+# knows the request is HTTPS (required for Secure cookies to be set).
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000          # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True            # session cookie must travel with API calls
@@ -122,20 +120,13 @@ CSRF_TRUSTED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],   # anonymous by design
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",                   # global safety net; per-endpoint limits later
+        "complaints": "10/hour",            # spec: max 10 complaint submissions/hour
     },
-}
-
-SPECTACULAR_SETTINGS = {
-    "TITLE": "SafeRent API",
-    "DESCRIPTION": "Anonymous, privacy-by-design API for buildings, complaints, etc.",
-    "VERSION": "0.1.0",
-    "SERVE_INCLUDE_SCHEMA": False,          # hide the raw /schema route from the docs UIs
 }
 
 LANGUAGE_CODE = "en-us"
