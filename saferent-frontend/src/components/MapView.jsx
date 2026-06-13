@@ -5,7 +5,7 @@ import { api } from "../api/client.js";
 const HAMILTON_CENTER = [-79.8711, 43.2557];
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
-export default function MapView({ onSelectBuilding, refreshKey }) {
+export default function MapView({ onSelectBuilding, refreshKey, flyTo }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
@@ -69,6 +69,12 @@ export default function MapView({ onSelectBuilding, refreshKey }) {
   }, [fetchPins, debouncedFetch]);
 
   useEffect(() => { if (loaded) fetchPins(); }, [refreshKey, loaded, fetchPins]);
+
+  useEffect(() => {
+    if (loaded && flyTo && mapRef.current) {
+      mapRef.current.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 15, duration: 1200 });
+    }
+  }, [flyTo, loaded]);
 
   if (mapError) {
     return (

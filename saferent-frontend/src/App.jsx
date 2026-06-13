@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import MapView from "./components/MapView.jsx";
 import BuildingPanel from "./components/BuildingPanel.jsx";
+import ComplaintForm from "./components/ComplaintForm.jsx";
 import { api } from "./api/client.js";
 
 function ApiStatus() {
@@ -20,8 +21,16 @@ function ApiStatus() {
 
 export default function App() {
   const [selectedId, setSelectedId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [flyTo, setFlyTo] = useState(null);
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
+
+  function handleSubmitted(location) {
+    // After a successful submit, recenter the map there and refresh pins.
+    setFlyTo({ lng: location.lng, lat: location.lat, t: Date.now() });
+    bumpRefresh();
+  }
 
   return (
     <div className="flex h-screen flex-col">
@@ -36,17 +45,32 @@ export default function App() {
       </header>
 
       <main className="relative flex-1">
-        <MapView onSelectBuilding={setSelectedId} refreshKey={refreshKey} />
+        <MapView onSelectBuilding={setSelectedId} refreshKey={refreshKey} flyTo={flyTo} />
 
-        <div className="pointer-events-none absolute left-3 top-3 z-[5] rounded-lg bg-white/90 px-3 py-2 text-xs text-ink/70 shadow">
+        <div className="pointer-events-none absolute left-3 top-3 z-[5] max-w-[60%] rounded-lg bg-white/90 px-3 py-2 text-xs text-ink/70 shadow">
           Numbered pins show complaints per building. Tap one for details.
         </div>
+
+        {/* Persistent report button — works even with zero pins (cold start) */}
+        <button
+          onClick={() => setFormOpen(true)}
+          className="absolute bottom-6 right-6 z-[5] rounded-full bg-brick px-5 py-3 font-display text-sm font-bold text-white shadow-lg hover:opacity-90"
+        >
+          + Report an issue
+        </button>
 
         {selectedId && (
           <BuildingPanel
             buildingId={selectedId}
             onClose={() => setSelectedId(null)}
             onChanged={bumpRefresh}
+          />
+        )}
+
+        {formOpen && (
+          <ComplaintForm
+            onClose={() => setFormOpen(false)}
+            onSubmitted={handleSubmitted}
           />
         )}
       </main>
